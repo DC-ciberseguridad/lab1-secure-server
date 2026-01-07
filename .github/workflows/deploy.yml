@@ -1,0 +1,44 @@
+name: Deploy Python API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "Dockerfile"
+      - "requirements.txt"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Copy app to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SERVER_IP }}
+          username: deploy
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "app Dockerfile requirements.txt"
+          target: "/home/deploy/app"
+
+      - name: Build & Run container
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ vars.SERVER_IP }}
+          username: deploy
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd ~/app
+
+            docker stop python_api || true
+            docker rm python_api || true
+
+            docker build -t python_api .
+            docker run -d \
+              --name python_api \
+              -p 8000:8000 \
+              --restart unless-stopped \
+              python_api

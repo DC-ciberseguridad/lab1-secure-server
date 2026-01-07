@@ -1,0 +1,37 @@
+name: Infra - Terraform AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "iac/**"
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Get Runner IP
+        run: echo "MY_IP=$(curl -s https://ifconfig.me)/32" >> $GITHUB_ENV
+
+      - name: Terraform Init & Apply
+        run: |
+          cd iac
+          terraform init
+          terraform apply -auto-approve \
+            -var="ssh_public_key=${{ vars.SSH_PUBLIC_KEY }}" \
+            -var="allowed_ssh_ip=$MY_IP"
+
+      - name: Show Outputs
+        run: |
+          cd iac
+          terraform output
