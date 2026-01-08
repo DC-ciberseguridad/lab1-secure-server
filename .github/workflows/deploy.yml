@@ -33,11 +33,11 @@ jobs:
           script: |
             cd ~/app
 
-            docker stop python_api || true
-            docker rm python_api || true
+            sudo docker stop python_api || true
+            sudo docker rm python_api || true
 
-            docker build -t python_api .
-            docker run -d \
+            sudo docker build -t python_api .
+            sudo docker run -d \
               --name python_api \
               -p 8000:8000 \
               --restart unless-stopped \
