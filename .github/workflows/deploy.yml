@@ -7,6 +7,7 @@ on:
       - "app/**"
       - "Dockerfile"
       - "requirements.txt"
+      - ".github/workflows/deploy.yml"
 
 jobs:
   deploy:
@@ -15,19 +16,30 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Get EC2 IP from Terraform state
+        run: |
+          cd iac
+          terraform init -input=false
+          echo "SERVER_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
+
       - name: Copy app to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ vars.SERVER_IP }}
+          host: ${{ env.SERVER_IP }}
           username: deploy
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "app Dockerfile requirements.txt"
+          source: |
+            app/
+            Dockerfile
+            requirements.txt
           target: "/home/deploy/app"
 
       - name: Build & Run container
         uses: appleboy/ssh-action@v0.1.7
         with:
-          host: ${{ vars.SERVER_IP }}
+          host: ${{ env.SERVER_IP }}
           username: deploy
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
@@ -42,3 +54,4 @@ jobs:
               -p 8000:8000 \
               --restart unless-stopped \
               python_api
+
