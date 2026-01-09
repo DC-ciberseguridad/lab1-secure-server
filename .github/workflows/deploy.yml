@@ -33,6 +33,18 @@ jobs:
           echo "SERVER_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
 
       # ============================
+      # Debug y Checkout
+      # ============================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Debug workspace
+        run: |
+          pwd
+          ls -la
+          ls -la app    
+
+      # ============================
       # Copiar app
       # ============================
       - name: Copy app to EC2
