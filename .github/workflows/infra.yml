@@ -25,17 +25,6 @@ jobs:
         run: |
           echo "MY_IP=$(curl -s https://ifconfig.me)/32" >> $GITHUB_ENV
 
-      - name: Ensure S3 backend exists
-        run: |
-          aws s3api head-bucket --bucket lab1-terraform-state-dani 2>/dev/null || \
-          aws s3api create-bucket \
-            --bucket lab1-terraform-state-dani \
-            --region us-east-1
-
-          aws s3api put-bucket-versioning \
-            --bucket lab1-terraform-state-dani \
-            --versioning-configuration Status=Enabled
-
       - name: Terraform Init & Apply
         run: |
           cd iac
