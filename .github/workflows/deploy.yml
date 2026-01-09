@@ -41,10 +41,7 @@ jobs:
           host: ${{ env.SERVER_IP }}
           username: deploy
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: |
-            app/
-            Dockerfile
-            requirements.txt
+          source: "app Dockerfile requirements.txt"
           target: "/home/deploy/app"
 
       # ============================
