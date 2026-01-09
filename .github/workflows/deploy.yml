@@ -35,6 +35,12 @@ jobs:
       # ============================
       # Copiar app
       # ============================
+      - name: Debug workspace
+        run: |
+          pwd
+          ls -la
+          ls -la app
+          
       - name: Copy app to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
