@@ -29,13 +29,49 @@ data "aws_ami" "ubuntu" {
   }
 }
 
+# Política IAM para pull a ECR
+
+resource "aws_iam_role" "ec2_role" {
+  name = "lab1-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_pull" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "lab1-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+
+# Crear repositorio ECR 
+
+resource "aws_ecr_repository" "python_api" {
+  name = "python-api"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
 # SSH Key
 resource "aws_key_pair" "deploy" {
   key_name   = "lab1-deploy-key"
   public_key = var.ssh_public_key
 }
 
-# Security Group (mínimo)
+# Security Group
 resource "aws_security_group" "web_sg" {
   name = "lab1-web-sg"
 
@@ -48,7 +84,7 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
-    description = "HTTP"
+    description = "App HTTP"
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
@@ -65,78 +101,42 @@ resource "aws_security_group" "web_sg" {
 
 # EC2
 resource "aws_instance" "web" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.micro"
-  key_name                    = aws_key_pair.deploy.key_name
-  vpc_security_group_ids      = [aws_security_group.web_sg.id]
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t3.micro"
+  key_name               = aws_key_pair.deploy.key_name
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   user_data = <<-EOF
 #!/bin/bash
 set -eux
 
-# =========================
-# Actualizar sistema
-# =========================
 apt-get update -y
-apt-get upgrade -y
-
-# =========================
-# Crear usuarios
-# =========================
-useradd -m -s /bin/bash admin
-useradd -m -s /bin/bash deploy
-
-# Copiar llaves SSH del usuario ubuntu
-mkdir -p /home/admin/.ssh /home/deploy/.ssh
-cp /home/ubuntu/.ssh/authorized_keys /home/admin/.ssh/
-cp /home/ubuntu/.ssh/authorized_keys /home/deploy/.ssh/
-
-chown -R admin:admin /home/admin/.ssh
-chown -R deploy:deploy /home/deploy/.ssh
-
-chmod 700 /home/*/.ssh
-chmod 600 /home/*/.ssh/authorized_keys
-
-# =========================
-# Sudo limitado
-# =========================
-echo "admin ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/admin
-chmod 440 /etc/sudoers.d/*
-
-# =========================
-# Instalar Docker
-# =========================
-apt-get install -y ca-certificates curl gnupg lsb-release ufw
-curl -fsSL https://get.docker.com | sh
-
-usermod -aG docker deploy
+apt-get install -y docker.io awscli curl
 
 systemctl enable docker
 systemctl start docker
 
-# =========================
-# Hardening SSH
-# =========================
-echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
-echo "PermitRootLogin no" >> /etc/ssh/sshd_config
-echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
-echo "X11Forwarding no" >> /etc/ssh/sshd_config
+REGION=us-east-1
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-systemctl reload sshd
+aws ecr get-login-password --region $REGION \
+ | docker login --username AWS --password-stdin \
+   $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
 
-# =========================
-# Firewall (UFW)
-# =========================
-ufw default deny incoming
-ufw default allow outgoing
+docker pull $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/python-api:latest
 
-ufw allow 22/tcp
-ufw allow 8000/tcp
+docker stop python_api || true
+docker rm python_api || true
+docker logs python_api || true
 
-ufw --force enable
-
+docker run -d \
+  --name python_api \
+  -p 8000:8000 \
+  --restart always \
+  $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/python-api:latest
 EOF
-
 
   tags = {
     Name = "lab1-secure-server"

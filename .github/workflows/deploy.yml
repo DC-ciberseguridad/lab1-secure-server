@@ -1,80 +1,41 @@
-name: Deploy Python API
+name: Build & Push Docker Image
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "app/**"
-      - "Dockerfile"
-      - "requirements.txt"
+  workflow_run:
+    workflows: ["Infra"]
+    types:
+      - completed
 
 jobs:
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: us-east-1
-
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
-
-      # ============================
-      # Leer IP desde Terraform state
-      # ============================
-      - name: Get EC2 IP from Terraform state
-        id: tf_ip
-        run: |
-          cd iac
-          terraform init -input=false
-          echo "SERVER_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
-
-      # ============================
-      # Debug y Checkout
-      # ============================
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Debug workspace
-        run: |
-          pwd
-          ls -la
-          ls -la app    
-
-      # ============================
-      # Copiar app
-      # ============================
-      - name: Copy app to EC2
-        uses: appleboy/scp-action@v0.1.7
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ env.SERVER_IP }}
-          username: deploy
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          source: .
-          target: "/home/deploy/app"
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
       # ============================
-      # Build & Run
-      # ============================
-      - name: Build & Run container
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ env.SERVER_IP }}
-          username: deploy
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd ~/app
+      # build + push a ECR
+      # ============================          
 
-            docker stop python_api || true
-            docker rm python_api || true
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-            docker build -t python_api .
-            docker run -d \
-              --name python_api \
-              -p 8000:8000 \
-              --restart unless-stopped \
-              python_api
+      - name: Build & Push
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
+          docker build -t python-api .
+          docker tag python-api:latest \
+            $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/python-api:latest
+
+          docker push \
+            $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/python-api:latest
+    
