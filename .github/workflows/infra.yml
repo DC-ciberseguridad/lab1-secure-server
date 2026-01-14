@@ -21,17 +21,13 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
 
-      - name: Get Runner IP
-        run: |
-          echo "MY_IP=$(curl -s https://ifconfig.me)/32" >> $GITHUB_ENV
-
       - name: Terraform Init & Apply
         run: |
           cd iac
           terraform init -input=false
           terraform apply -auto-approve \
-            -var="ssh_public_key=${{ vars.SSH_PUBLIC_KEY }}" \
-            -var="allowed_ssh_ip=$MY_IP"
+           -var="ssh_public_key=${{ vars.SSH_PUBLIC_KEY }}" \
+            -var='allowed_ssh_ips=["${{ secrets.MY_HOME_IP }}"]'
 
 
       - name: Show Outputs

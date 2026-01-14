@@ -9,7 +9,7 @@ variable "ssh_public_key" {
   type        = string
 }
 
-variable "allowed_ssh_ip" {
-  description = "IP allowed to SSH (x.x.x.x/32)"
-  type        = string
+variable "allowed_ssh_ips" {
+  type = list(string)
 }
+
