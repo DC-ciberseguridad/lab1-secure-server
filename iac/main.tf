@@ -140,30 +140,59 @@ resource "aws_instance" "web" {
 #!/bin/bash
 set -eux
 
+# --------- VARIABLES ---------
+REGION="us-east-1"
+APP_NAME="python_api"
+IMAGE_NAME="python-api"
+PORT="8000"
+CRON_INTERVAL="*/5 * * * *"
+
+# --------- DEPENDENCIAS ---------
 apt-get update -y
 apt-get install -y docker.io awscli curl
 
 systemctl enable docker
 systemctl start docker
 
-REGION=us-east-1
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+# --------- SCRIPT UPDATE ---------
+cat <<'SCRIPT' > /usr/local/bin/update_app.sh
+#!/bin/bash
+set -e
 
+REGION="us-east-1"
+APP_NAME="python_api"
+IMAGE_NAME="python-api"
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+IMAGE="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$IMAGE_NAME:latest"
+
+# Login a ECR
 aws ecr get-login-password --region $REGION \
  | docker login --username AWS --password-stdin \
    $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
 
-docker pull $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/python-api:latest
+# Pull imagen
+docker pull $IMAGE
 
-docker stop python_api || true
-docker rm python_api || true
-docker logs python_api || true
+# Reemplazar contenedor
+docker stop $APP_NAME || true
+docker rm $APP_NAME || true
 
 docker run -d \
-  --name python_api \
+  --name $APP_NAME \
   -p 8000:8000 \
   --restart always \
-  $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/python-api:latest
+  $IMAGE
+SCRIPT
+
+chmod +x /usr/local/bin/update_app.sh
+
+# --------- PRIMER DEPLOY ---------
+/usr/local/bin/update_app.sh
+
+# --------- CRON JOB ---------
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/update_app.sh >> /var/log/update_app.log 2>&1") | crontab -
+
 EOF
 
   tags = {
