@@ -27,7 +27,7 @@ jobs:
           terraform init -input=false
           terraform apply -auto-approve \
            -var="ssh_public_key=${{ vars.SSH_PUBLIC_KEY }}" \
-            -var='allowed_ssh_ips=["${{ secrets.MY_HOME_IP }}"]'
+           -var='allowed_ssh_ips=["${{ secrets.MY_HOME_IP }}"]'
 
 
       - name: Show Outputs

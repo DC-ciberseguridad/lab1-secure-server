@@ -75,28 +75,33 @@ resource "aws_key_pair" "deploy" {
 resource "aws_security_group" "web_sg" {
   name = "lab1-web-sg"
 
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_ssh_ips
-  }
-
-  ingress {
-    description = "App HTTP"
-    from_port   = 8000
-    to_port     = 8000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
+
+resource "aws_security_group_rule" "app_http" {
+  type              = "ingress"
+  description       = "FastAPI"
+  from_port         = 8000
+  to_port           = 8000
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.web_sg.id
+}
+
+# Así Terraform sí detecta cambios de IPs
+resource "aws_security_group_rule" "ssh" {
+  type              = "ingress"
+  description       = "SSH access"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = var.allowed_ssh_ips
+  security_group_id = aws_security_group.web_sg.id
 }
 
 # EC2
@@ -139,6 +144,9 @@ docker run -d \
 EOF
 
   tags = {
-    Name = "lab1-secure-server"
+    Name        = "lab1-secure-server"
+    Environment = "lab"
+    ManagedBy   = "terraform"
   }
+  user_data_replace_on_change = false
 }
