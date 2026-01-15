@@ -81,6 +81,12 @@ resource "aws_security_group" "web_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = {
+    Name        = "lab1-web-sg"
+    ManagedBy  = "terraform"
+    Environment = "lab"
+  }
 }
 
 resource "aws_security_group_rule" "app_http" {
@@ -145,8 +151,6 @@ EOF
 
   tags = {
     Name        = "lab1-secure-server"
-    Environment = "lab"
-    ManagedBy   = "terraform"
   }
   user_data_replace_on_change = false
 }
